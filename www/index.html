@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chess</title>
+<style>
+:root{--bg:#eef2f5;--fg:#16212b;--pn:#fff;--l:#dfe6ec;--d:#6f8aa3;--hl:#f2c14e;--ok:#2f7d57;--bad:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1a24;--fg:#e8eef3;--pn:#192a38;--l:#b9c7d3;--d:#476680;--hl:#d9a928}}
+:root[data-theme="dark"]{--bg:#0f1a24;--fg:#e8eef3;--pn:#192a38;--l:#b9c7d3;--d:#476680;--hl:#d9a928}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+main{max-width:520px;margin:0 auto;padding:10px 10px 18px}
+h1{font:700 22px/1.2 Georgia,"Times New Roman",serif;margin:4px 2px 8px}
+#st{background:var(--pn);border-radius:10px;padding:10px 12px;font-weight:600;margin-bottom:8px;border-left:5px solid var(--d)}
+#st.end{border-color:var(--ok)}#st.chk{border-color:var(--bad)}
+.cap{min-height:24px;font-size:20px;letter-spacing:1px;padding:0 4px;line-height:24px}
+.board{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr));width:min(100%,72vh);margin:0 auto;aspect-ratio:1;container-type:inline-size;border-radius:6px;overflow:hidden;touch-action:manipulation;user-select:none}
+.sq{position:relative;display:flex;min-width:0;min-height:0;aspect-ratio:1;align-items:center;justify-content:center;font-size:10.5cqw;line-height:1;cursor:pointer}
+.l{background:var(--l)}.d{background:var(--d)}
+.sq.last::before,.sq.sel::before{content:"";position:absolute;inset:0;background:var(--hl);opacity:.55}
+.sq.kc{box-shadow:inset 0 0 0 .8cqw var(--bad)}
+.pc{position:relative;z-index:1}
+.pc.w{color:#fff;text-shadow:0 0 2px #000,0 0 1px #000,0 .3cqw .4cqw #0008}
+.pc.b{color:#14181c;text-shadow:0 0 1px #fff6}
+.dot{position:absolute;width:32%;height:32%;border-radius:50%;background:#16212b55;z-index:2}
+.dot.x{width:88%;height:88%;background:none;border:.9cqw solid #16212b66}
+.co{position:absolute;font:600 2.3cqw sans-serif;opacity:.7;z-index:1}
+.co.r{top:3%;left:5%}.co.f{bottom:3%;right:6%}
+.pc.mv{z-index:3;animation:slide .26s ease-out}
+@keyframes slide{from{transform:translate(var(--dx),var(--dy))}to{transform:none}}
+.ghost{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none;animation:cap .5s .14s ease-out both}
+@keyframes cap{0%{opacity:1;transform:scale(1) rotate(0)}100%{opacity:0;transform:scale(1.7) rotate(25deg)}}
+.sq.burst::after{content:"";position:absolute;inset:10%;border-radius:50%;border:.8cqw solid var(--bad);z-index:2;pointer-events:none;animation:ring .5s .14s ease-out both}
+@keyframes ring{from{transform:scale(.3);opacity:.9}to{transform:scale(1.6);opacity:0}}
+@media (prefers-reduced-motion:reduce){.pc.mv,.sq.burst::after{animation:none}.ghost{display:none}}
+.bar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.bar.s{grid-template-columns:repeat(3,1fr)}
+button,select{font:600 14px system-ui,sans-serif;color:var(--fg);background:var(--pn);border:1px solid var(--d);border-radius:10px;padding:11px 6px;min-height:44px}
+button:active{background:var(--hl)}
+#pm{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:9}
+#pm.on{display:flex}
+#pm div{background:var(--pn);padding:14px;border-radius:14px;display:flex;gap:8px}
+#pm button{font-size:42px;padding:4px 10px;line-height:1.1;color:var(--fg)}
+</style></head><body><main>
+<h1>Chess</h1>
+<div id="st">Loading…</div>
+<div class="cap" id="ct"></div>
+<div class="board" id="bd"></div>
+<div class="cap" id="cb"></div>
+<div class="bar"><button id="nw">New game</button><button id="un">Undo</button><button id="fl">Flip</button><button id="hn">Hint</button></div>
+<div class="bar s">
+<select id="mode"><option value="ai">vs Computer</option><option value="2p">2 players</option></select>
+<select id="side"><option value="w">Play White</option><option value="b">Play Black</option></select>
+<select id="lv"><option value="0">Easy</option><option value="1" selected>Medium</option><option value="2">Hard</option></select>
+</div>
+</main>
+<div id="pm"><div></div></div>
+<script>
+const $=id=>document.getElementById(id);
+const START='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+const GL={k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+const gl=p=>GL[p.toLowerCase()]+'\uFE0E';
+const V={p:100,n:320,b:330,r:500,q:900,k:0};
+const isW=p=>p>='A'&&p<='Z';
+const side=p=>!p?'':isW(p)?'w':'b';
+const KN=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+const KG=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+const DG=[[-1,-1],[-1,1],[1,-1],[1,1]],ST=[[-1,0],[1,0],[0,-1],[0,1]];
+const RT={60:'KQ',63:'K',56:'Q',4:'kq',7:'k',0:'q'};
+function init(){const b=[];for(const ch of START){if(ch=='/')continue;if(ch>='1'&&ch<='8')for(let i=0;i<+ch;i++)b.push('');else b.push(ch)}return{b,turn:'w',cas:'KQkq',ep:-1,half:0}}
+function att(b,sq,by){
+ const r=sq>>3,c=sq&7,up=by=='w';
+ const at=(rr,cc,set)=>rr>=0&&rr<8&&cc>=0&&cc<8&&set.includes(b[rr*8+cc]);
+ const pr=up?r+1:r-1;
+ if(at(pr,c-1,[up?'P':'p'])||at(pr,c+1,[up?'P':'p']))return true;
+ for(const[d,e]of KN)if(at(r+d,c+e,[up?'N':'n']))return true;
+ for(const[d,e]of KG)if(at(r+d,c+e,[up?'K':'k']))return true;
+ for(const[ds,set]of[[DG,up?['B','Q']:['b','q']],[ST,up?['R','Q']:['r','q']]])
+  for(const[d,e]of ds){let rr=r+d,cc=c+e;while(rr>=0&&rr<8&&cc>=0&&cc<8){const p=b[rr*8+cc];if(p){if(set.includes(p))return true;break}rr+=d;cc+=e}}
+ return false}
+function pseudo(s){
+ const{b,turn:me,cas,ep}=s,out=[],w=me=='w';
+ const add=(f,t,x={})=>out.push({f,t,...x});
+ for(let f=0;f<64;f++){const p=b[f];if(!p||side(p)!=me)continue;
+  const r=f>>3,c=f&7,k=p.toLowerCase();
+  if(k=='p'){const d=w?-1:1,sr=w?6:1,pr=w?0:7,t1=f+d*8;
+   const push=(t,x)=>{if((t>>3)==pr)for(const q of'qrbn')add(f,t,{...x,p:q});else add(f,t,x)};
+   if(!b[t1]){push(t1,{});if(r==sr&&!b[t1+d*8])add(f,t1+d*8,{dbl:1})}
+   for(const dc of[-1,1]){const cc=c+dc;if(cc<0||cc>7)continue;const t=t1+dc;
+    if(b[t]&&side(b[t])!=me)push(t,{x:1});else if(t==ep)add(f,t,{ep:1,x:1})}
+  }else if(k=='n'||k=='k'){
+   for(const[d,e]of k=='n'?KN:KG){const rr=r+d,cc=c+e;if(rr<0||rr>7||cc<0||cc>7)continue;const t=rr*8+cc;if(!b[t]||side(b[t])!=me)add(f,t,{x:b[t]?1:0})}
+   if(k=='k'&&f==(w?60:4)&&!att(b,f,w?'b':'w')){
+    const o=w?'b':'w',rk=w?'R':'r';
+    if(cas.includes(w?'K':'k')&&!b[f+1]&&!b[f+2]&&b[f+3]==rk&&!att(b,f+1,o)&&!att(b,f+2,o))add(f,f+2,{ca:1});
+    if(cas.includes(w?'Q':'q')&&!b[f-1]&&!b[f-2]&&!b[f-3]&&b[f-4]==rk&&!att(b,f-1,o)&&!att(b,f-2,o))add(f,f-2,{ca:1});
+   }
+  }else{
+   for(const[d,e]of(k=='b'?DG:k=='r'?ST:[...DG,...ST])){let rr=r+d,cc=c+e;
+    while(rr>=0&&rr<8&&cc>=0&&cc<8){const t=rr*8+cc;if(b[t]){if(side(b[t])!=me)add(f,t,{x:1});break}add(f,t);rr+=d;cc+=e}}
+  }}
+ return out}
+function mk(s,m){
+ const b=s.b.slice(),p=b[m.f],w=s.turn=='w';
+ b[m.t]=m.p?(w?m.p.toUpperCase():m.p):p;b[m.f]='';
+ if(m.ep)b[m.t+(w?8:-8)]='';
+ if(m.ca){if(m.t>m.f){b[m.f+1]=b[m.f+3];b[m.f+3]=''}else{b[m.f-1]=b[m.f-4];b[m.f-4]=''}}
+ let cas=s.cas;for(const q of[m.f,m.t])if(RT[q])for(const ch of RT[q])cas=cas.replace(ch,'');
+ return{b,turn:w?'b':'w',cas,ep:m.dbl?(m.f+m.t)/2:-1,half:(p.toLowerCase()=='p'||m.x)?0:s.half+1}}
+const kingOf=(s,col)=>s.b.indexOf(col=='w'?'K':'k');
+function legal(s){return pseudo(s).filter(m=>{const n=mk(s,m);return!att(n.b,kingOf(n,s.turn),n.turn)})}
+const chk=s=>att(s.b,kingOf(s,s.turn),s.turn=='w'?'b':'w');
+function ev(s){let v=0;
+ for(let i=0;i<64;i++){const p=s.b[i];if(!p)continue;
+  const k=p.toLowerCase(),w=isW(p),r=i>>3,c=i&7,cen=(3.5-Math.abs(c-3.5))+(3.5-Math.abs(r-3.5));
+  let x=V[k];
+  if(k=='n'||k=='b')x+=cen*8;else if(k=='q')x+=cen*2;
+  else if(k=='p'){x+=(w?6-r:r-1)*8+((c==3||c==4)?cen*2:0)}
+  else if(k=='k'&&(w?r==7:r==0))x+=20;
+  v+=w?x:-x}
+ return s.turn=='w'?v:-v}
+const sc=(s,m)=>(m.x?10*V[(s.b[m.t]||'p').toLowerCase()]-V[s.b[m.f].toLowerCase()]/10:0)+(m.p?800:0);
+function nm(s,d,a,b,ply){
+ const ms=legal(s);if(!ms.length)return chk(s)?-1e5+ply:0;
+ if(s.half>=100)return 0;if(!d)return ev(s);
+ ms.sort((x,y)=>sc(s,y)-sc(s,x));
+ for(const m of ms){const v=-nm(mk(s,m),d-1,-b,-a,ply+1);if(v>=b)return b;if(v>a)a=v}
+ return a}
+function best(s,lv){
+ const ms=legal(s),d=[1,2,3][lv];let bm=ms[0],bv=-1e9;
+ for(const m of ms){const v=-nm(mk(s,m),d-1,-1e9,1e9,1)+Math.random()*(lv==0?70:5);if(v>bv){bv=v;bm=m}}
+ return bm}
+/* ---------- UI ---------- */
+let anim=null,S,hist,sel=null,cur=[],flip=false,mode='ai',me='w',lv=1,over=false,busy=false,hint=null;
+const nameOf=c=>c=='w'?'White':'Black';
+const key=s=>s.b.join('')+s.turn+s.cas+s.ep;
+function result(ms){
+ if(!ms.length)return chk(S)?['Checkmate. '+nameOf(S.turn=='w'?'b':'w')+' wins.']:['Stalemate. Draw.'];
+ if(S.half>=100)return['Draw by the 50-move rule.'];
+ const k=key(S);let n=1;for(const h of hist)if(key(h.s)==k)n++;
+ if(n>=3)return['Draw by repetition.'];
+ const rest=S.b.filter(p=>p&&p.toLowerCase()!='k');
+ if(!rest.length||(rest.length==1&&'nb'.includes(rest[0].toLowerCase())))return['Draw. Not enough material.'];
+ return null}
+function render(){
+ cur=legal(S);const res=result(cur);over=!!res;
+ const st=$('st'),c=chk(S);
+ st.className=over?'end':c?'chk':'';
+ st.textContent=res?res[0]:(busy?'Computer is thinking…':(mode=='ai'?(S.turn==me?'Your move':'Computer’s move'):nameOf(S.turn)+' to move')+(c?' · Check':''));
+ const last=hist.length?hist[hist.length-1].m:null,kc=c?kingOf(S,S.turn):-1;
+ const tg=new Map(cur.filter(m=>m.f===sel).map(m=>[m.t,m]));
+ let h='';
+ for(let i=0;i<64;i++){const x=flip?63-i:i,r=x>>3,f=x&7,p=S.b[x];
+  const cl=['sq',(r+f)%2?'d':'l'];
+  if(x===sel)cl.push('sel');if(last&&(x==last.f||x==last.t))cl.push('last');if(hint&&(x==hint.f||x==hint.t))cl.push('sel');if(x==kc)cl.push('kc');
+  h+=`<div class="${cl.join(' ')}" data-i="${x}">`;
+  if(i%8==0)h+=`<span class="co r">${8-r}</span>`;
+  if(i>55)h+=`<span class="co f">${'abcdefgh'[f]}</span>`;
+  if(p)h+=`<span class="pc ${side(p)}">${gl(p)}</span>`;
+  if(tg.has(x))h+=`<span class="dot${p||tg.get(x).ep?' x':''}"></span>`;
+  h+='</div>'}
+ $('bd').innerHTML=h;
+ if(anim){const a=anim;anim=null;const q=x=>{const i=flip?63-x:x;return[i&7,i>>3]};
+  const[fc,fr]=q(a.f),[tc,tr]=q(a.t),mv=$('bd').querySelector(`[data-i="${a.t}"] .pc`);
+  if(mv){mv.style.setProperty('--dx',(fc-tc)*12.5+'cqw');mv.style.setProperty('--dy',(fr-tr)*12.5+'cqw');mv.classList.add('mv')}
+  if(a.cap){const sq=$('bd').querySelector(`[data-i="${a.cs}"]`);if(sq){sq.insertAdjacentHTML('beforeend',`<span class="ghost pc ${side(a.cap)}">${gl(a.cap)}</span>`);sq.classList.add('burst')}}}
+ const cnt={p:8,n:2,b:2,r:2,q:1},have={w:{...cnt},b:{...cnt}};
+ for(const p of S.b)if(p&&p.toLowerCase()!='k')have[side(p)][p.toLowerCase()]--;
+ const lost=col=>{let s='';for(const k of'qrbnp')for(let j=0;j<Math.max(0,have[col][k]);j++)s+=gl(k);return s};
+ const top=flip?'w':'b',bot=flip?'b':'w';
+ $('ct').innerHTML=capHtml(lost(top),top);$('cb').innerHTML=capHtml(lost(bot),bot);
+}
+function capHtml(s,col){return s?`<span style="color:${col=='w'?'#fff':'#14181c'};text-shadow:${col=='w'?'0 0 2px #000':'0 0 1px #fff6'}">${s}</span>`:''}
+function play(m){
+ const cs=m.ep?m.t+(S.turn=='w'?8:-8):m.t;
+ anim={f:m.f,t:m.t,cap:S.b[cs],cs};
+ hist.push({s:S,m});S=mk(S,m);sel=null;hint=null;
+ try{navigator.vibrate&&navigator.vibrate(12)}catch(e){}
+ render();if(mode=='ai'&&!over&&S.turn!=me)aiMove()}
+function aiMove(){
+ busy=true;$('st').textContent='Computer is thinking…';$('st').className='';
+ setTimeout(()=>{const m=best(S,lv);busy=false;play(m)},380)}
+function newGame(){
+ mode=$('mode').value;me=$('side').value;lv=+$('lv').value;
+ S=init();hist=[];sel=null;hint=null;busy=false;flip=mode=='ai'&&me=='b';
+ $('side').disabled=mode!='ai';$('lv').disabled=mode!='ai';
+ render();if(mode=='ai'&&me=='b')aiMove()}
+$('bd').addEventListener('click',e=>{
+ const q=e.target.closest('.sq');if(!q||over||busy)return;
+ if(mode=='ai'&&S.turn!=me)return;
+ const i=+q.dataset.i;hint=null;
+ if(sel!==null){const ms=cur.filter(m=>m.f===sel&&m.t===i);
+  if(ms.length){if(ms[0].p)return promo(ms);return play(ms[0])}}
+ sel=side(S.b[i])==S.turn?(i===sel?null:i):null;render()});
+function promo(ms){
+ const box=$('pm').firstElementChild;box.innerHTML='';
+ for(const m of ms){const b=document.createElement('button');b.textContent=gl(m.p);
+  b.style.color=S.turn=='w'?'#fff':'#14181c';b.style.textShadow=S.turn=='w'?'0 0 3px #000':'none';
+  b.onclick=()=>{$('pm').classList.remove('on');play(m)};box.appendChild(b)}
+ $('pm').classList.add('on')}
+$('nw').onclick=newGame;
+$('fl').onclick=()=>{flip=!flip;render()};
+$('un').onclick=()=>{
+ if(busy||!hist.length)return;
+ S=hist.pop().s;if(mode=='ai'&&S.turn!=me&&hist.length)S=hist.pop().s;
+ sel=null;hint=null;render();if(mode=='ai'&&S.turn!=me&&!over)aiMove()};
+$('hn').onclick=()=>{
+ if(over||busy||(mode=='ai'&&S.turn!=me))return;
+ $('st').textContent='Finding a hint…';
+ setTimeout(()=>{hint=best(S,2);sel=null;render()},40)};
+$('mode').onchange=()=>{$('side').disabled=$('mode').value!='ai';$('lv').disabled=$('mode').value!='ai'};
+newGame();
+</script></body></html>
